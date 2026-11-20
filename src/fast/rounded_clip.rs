@@ -182,6 +182,17 @@ pub(crate) fn paint_children(
     cx: &mut App,
     paint: impl FnOnce(&mut Window, &mut App),
 ) {
+    // Fork patch: the Direct3D 11 backend draws a rounded overflow scope's children through a
+    // clip-mask pass whose geometry can evaluate to zero coverage for every fragment (observed
+    // with correct bounds and radii), so the content is silently discarded while the element's
+    // own background still paints — every image inside such a container disappears.
+    // Skip the scope on Windows; the rectangular overflow mask still clips the content, so only
+    // the rounded corners are lost. `GPUI_ROUNDED_CLIPS=1` opts back in, e.g. to retest a new
+    // GPU or driver; drop this once the backend renders rounded scopes reliably.
+    #[cfg(target_os = "windows")]
+    if std::env::var_os("GPUI_ROUNDED_CLIPS").is_none() {
+        return paint(window, cx);
+    }
     let Some(shape) = Shape::for_style(style, bounds, window.rem_size(), window.scale_factor())
     else {
         return paint(window, cx);
